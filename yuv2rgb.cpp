@@ -43,7 +43,7 @@ bool decode_yuv_neon(unsigned char* out, unsigned char const* y, unsigned char c
     uint16x8_t t;
 
     // pixel block to temporary store 8 pixels
-    typename trait::PixelBlock pblock = trait::init_pixelblock(fill_alpha);    
+    typename trait::PixelBlock pblock = trait::init_pixelblock(fill_alpha);
 
     for (int j=0; j<itHeight; ++j, y+=width, dst+=stride) {
         for (int i=0; i<itWidth; ++i, y+=8, uv+=8, dst+=(8*trait::bytes_per_pixel)) {
@@ -114,6 +114,28 @@ bool nv21_to_rgb(unsigned char* rgb, unsigned char const* nv21, int width, int h
 
 bool nv21_to_rgb(unsigned char* rgb, unsigned char const* y, unsigned char const* uv, int width, int height) {
     return decode_yuv_neon<NV21toRGB_neon>(rgb, y, uv, width, height);
+}
+
+class NV12toRGB_neon {
+public:
+    enum { bytes_per_pixel = 3 };
+    typedef uint8x8x3_t PixelBlock;
+    static PixelBlock const init_pixelblock(unsigned char /*fill_alpha*/) {
+        return uint8x8x3_t();
+    }
+    static uint8x8_t const loadvu(unsigned char const* uv) {
+        return vrev16_u8(vld1_u8(uv));
+    }
+    static void store_pixel_block(unsigned char* dst, PixelBlock& pblock, uint8x8_t const& r, uint8x8_t const& g, uint8x8_t const& b) {
+        pblock.val[0] = r;
+        pblock.val[1] = g;
+        pblock.val[2] = b;
+        vst3_u8(dst, pblock);
+    }
+};
+
+bool nv12_to_rgb(unsigned char* rgb, unsigned char const* nv12, int width, int height) {
+    return decode_yuv_neon<NV12toRGB_neon>(rgb, nv12, nv12+(width*height), width, height);
 }
 
 //------------------------------------------------------------------------------
@@ -307,7 +329,7 @@ public:
         U = (*uv++) - 128;
     }
     static void store_pixel(unsigned char* &dst, int iR, int iG, int iB, unsigned char alpha) {
-        *dst++ = (iB>0) ? (iB<65535 ? (unsigned char)(iB>>8):0xff):0;		
+        *dst++ = (iB>0) ? (iB<65535 ? (unsigned char)(iB>>8):0xff):0;
         *dst++ = (iG>0) ? (iG<65535 ? (unsigned char)(iG>>8):0xff):0;
         *dst++ = (iR>0) ? (iR<65535 ? (unsigned char)(iR>>8):0xff):0;
         *dst++ = alpha;
